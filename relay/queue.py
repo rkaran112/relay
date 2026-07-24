@@ -16,6 +16,7 @@ from psycopg import Connection
 from psycopg.rows import TupleRow, dict_row
 from psycopg.types.json import Jsonb
 
+from . import tracing
 from .models import Job
 
 # ---------------------------------------------------------------------------
@@ -41,27 +42,42 @@ def enqueue(
     therefore never creates a second job. Jobs enqueued with no idempotency key
     always insert (NULLs don't collide under the unique constraint).
     """
-    with conn.transaction():
-        row = conn.execute(
-            """
-            INSERT INTO jobs (queue, payload, idempotency_key, run_at,
-                              max_attempts, priority, traceparent)
-            VALUES (%s, %s, %s, COALESCE(%s, now()), %s, %s, %s)
-            ON CONFLICT (queue, idempotency_key) DO NOTHING
-            RETURNING id
-            """,
-            (queue, Jsonb(payload), idempotency_key, run_at, max_attempts, priority, traceparent),
-        ).fetchone()
-        if row is not None:
-            return int(row[0])
-        # Conflict: ON CONFLICT waited for the concurrent inserter to commit, so a
-        # fresh statement (new READ COMMITTED snapshot) is guaranteed to see the row.
-        existing = conn.execute(
-            "SELECT id FROM jobs WHERE queue = %s AND idempotency_key = %s",
-            (queue, idempotency_key),
-        ).fetchone()
-        assert existing is not None, "conflict without a visible row"
-        return int(existing[0])
+    with tracing.tracer().start_as_current_span(
+        "relay.enqueue", attributes={"relay.queue": queue}
+    ):
+        # Stamp the producer's trace context onto the row so the worker's handle span
+        # can attach to it across the queue boundary.
+        if traceparent is None:
+            traceparent = tracing.current_traceparent()
+        with conn.transaction():
+            row = conn.execute(
+                """
+                INSERT INTO jobs (queue, payload, idempotency_key, run_at,
+                                  max_attempts, priority, traceparent)
+                VALUES (%s, %s, %s, COALESCE(%s, now()), %s, %s, %s)
+                ON CONFLICT (queue, idempotency_key) DO NOTHING
+                RETURNING id
+                """,
+                (
+                    queue,
+                    Jsonb(payload),
+                    idempotency_key,
+                    run_at,
+                    max_attempts,
+                    priority,
+                    traceparent,
+                ),
+            ).fetchone()
+            if row is not None:
+                return int(row[0])
+            # Conflict: ON CONFLICT waited for the concurrent inserter to commit, so a
+            # fresh statement (new READ COMMITTED snapshot) is guaranteed to see the row.
+            existing = conn.execute(
+                "SELECT id FROM jobs WHERE queue = %s AND idempotency_key = %s",
+                (queue, idempotency_key),
+            ).fetchone()
+            assert existing is not None, "conflict without a visible row"
+            return int(existing[0])
 
 
 # ---------------------------------------------------------------------------

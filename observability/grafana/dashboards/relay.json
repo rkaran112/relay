@@ -1,0 +1,54 @@
+{
+  "uid": "relay-overview",
+  "title": "relay — queue overview",
+  "tags": ["relay"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "type": "timeseries", "title": "Jobs by state",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "custom": { "stacking": { "mode": "normal" }, "fillOpacity": 25 } } },
+      "targets": [
+        { "expr": "sum by (state) (relay_jobs)", "legendFormat": "{{state}}" }
+      ]
+    },
+    {
+      "id": 2, "type": "timeseries", "title": "Throughput (jobs/sec)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        { "expr": "sum(rate(relay_jobs_processed_total[1m]))", "legendFormat": "processed" },
+        { "expr": "sum(rate(relay_jobs_failed_total[1m]))", "legendFormat": "failed" }
+      ]
+    },
+    {
+      "id": 3, "type": "timeseries", "title": "Handler duration (p50/p95/p99)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.5, sum by (le) (rate(relay_handler_duration_seconds_bucket[1m])))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(relay_handler_duration_seconds_bucket[1m])))", "legendFormat": "p95" },
+        { "expr": "histogram_quantile(0.99, sum by (le) (rate(relay_handler_duration_seconds_bucket[1m])))", "legendFormat": "p99" }
+      ]
+    },
+    {
+      "id": 4, "type": "stat", "title": "Oldest pending age (s)",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [ { "expr": "max(relay_oldest_pending_age_seconds)" } ]
+    },
+    {
+      "id": 5, "type": "stat", "title": "Dead letters",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 8 },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] } } },
+      "targets": [ { "expr": "sum(relay_dead_letters)" } ]
+    },
+    {
+      "id": 6, "type": "timeseries", "title": "Lease expiries / sec (reaper)",
+      "gridPos": { "h": 4, "w": 12, "x": 12, "y": 12 },
+      "targets": [ { "expr": "rate(relay_lease_expiries_total[1m])", "legendFormat": "reclaimed" } ]
+    }
+  ]
+}

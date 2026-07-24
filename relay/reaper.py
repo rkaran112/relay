@@ -16,6 +16,7 @@ from psycopg import Connection
 from psycopg.rows import TupleRow
 
 from .db import connect
+from .metrics import LEASE_EXPIRIES
 
 _DEFAULT_REASON = "lease expired (visibility timeout)"
 
@@ -82,14 +83,18 @@ class Reaper:
     def reap_once(self) -> tuple[int, int]:
         with connect(self.dsn) as conn:
             requeued, dead = reap(conn, base=self.base, cap=self.cap)
-        self.requeued += requeued
-        self.deadlettered += dead
+        self._account(requeued, dead)
         return (requeued, dead)
 
     def run_forever(self) -> None:
         with connect(self.dsn) as conn:
             while not self._stop.is_set():
                 requeued, dead = reap(conn, base=self.base, cap=self.cap)
-                self.requeued += requeued
-                self.deadlettered += dead
+                self._account(requeued, dead)
                 self._stop.wait(self.interval)
+
+    def _account(self, requeued: int, dead: int) -> None:
+        self.requeued += requeued
+        self.deadlettered += dead
+        if requeued or dead:
+            LEASE_EXPIRIES.inc(requeued + dead)

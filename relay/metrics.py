@@ -9,9 +9,28 @@ the API scrape; see RESULTS.md.
 
 from __future__ import annotations
 
-from prometheus_client import CollectorRegistry, Gauge, generate_latest
+from prometheus_client import (
+    REGISTRY,
+    CollectorRegistry,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+)
 from psycopg import Connection
 from psycopg.rows import TupleRow
+
+# Process-local worker metrics (default registry). Workers update these in-process;
+# the /metrics endpoint appends them to the DB-derived queue gauges below.
+HANDLER_DURATION = Histogram(
+    "relay_handler_duration_seconds",
+    "Handler execution time",
+    ["queue"],
+    buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0),
+)
+JOBS_PROCESSED = Counter("relay_jobs_processed_total", "Jobs completed by a worker", ["queue"])
+JOBS_FAILED = Counter("relay_jobs_failed_total", "Handler failures", ["queue"])
+LEASE_EXPIRIES = Counter("relay_lease_expiries_total", "Leases reclaimed by the reaper")
 
 
 def render_metrics(conn: Connection[TupleRow]) -> bytes:
@@ -51,4 +70,5 @@ def render_metrics(conn: Connection[TupleRow]) -> bytes:
     ).fetchall():
         dlq.labels(queue=queue).set(n)
 
-    return generate_latest(registry)
+    # DB-derived queue gauges + process-local worker histograms/counters.
+    return generate_latest(registry) + generate_latest(REGISTRY)

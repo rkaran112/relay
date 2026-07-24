@@ -14,6 +14,9 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "psycopg-pool>=3.2",
     "prometheus-client>=0.20",
+    "opentelemetry-api>=1.25",
+    "opentelemetry-sdk>=1.25",
+    "opentelemetry-exporter-otlp-proto-http>=1.25",
 ]
 
 [project.scripts]
@@ -58,6 +61,10 @@ ignore_errors = true
 
 [[tool.mypy.overrides]]
 module = "redis.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "opentelemetry.*"
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

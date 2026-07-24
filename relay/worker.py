@@ -17,8 +17,10 @@ from uuid import UUID, uuid4
 from psycopg import Connection
 from psycopg.rows import TupleRow
 
+from . import tracing
 from .backoff import full_jitter
 from .db import connect
+from .metrics import HANDLER_DURATION, JOBS_FAILED, JOBS_PROCESSED
 from .models import Job
 from .queue import complete, dequeue, fail
 
@@ -93,7 +95,16 @@ class Worker:
     def _process(self, conn: Connection[TupleRow], job: Job) -> None:
         assert job.lease_owner is not None and job.lease_token is not None
         try:
-            with conn.transaction():
+            # handle span attaches to the producer's enqueue trace via job.traceparent.
+            with (
+                tracing.handle_span(
+                    "relay.handle",
+                    job.traceparent,
+                    attributes={"relay.queue": job.queue, "relay.job_id": job.id},
+                ),
+                HANDLER_DURATION.labels(queue=job.queue).time(),
+                conn.transaction(),
+            ):
                 self.handler(conn, job)
                 if not complete(
                     conn, job.id, lease_owner=job.lease_owner, lease_token=job.lease_token
@@ -102,8 +113,10 @@ class Worker:
         except _LeaseLost:
             return  # zombie: another worker owns this job now; side effect rolled back
         except Exception as exc:
+            JOBS_FAILED.labels(queue=job.queue).inc()
             self._fail(conn, job, exc)
             return
+        JOBS_PROCESSED.labels(queue=job.queue).inc()
         self.processed += 1
 
     def _fail(self, conn: Connection[TupleRow], job: Job, exc: Exception) -> None:

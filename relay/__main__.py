@@ -20,15 +20,19 @@ def _serve(args: argparse.Namespace) -> None:
     import uvicorn
 
     from .api import create_app
+    from .tracing import configure_tracing
 
+    configure_tracing("relay-api")
     uvicorn.run(create_app(), host=args.host, port=args.port)
 
 
 def _worker(args: argparse.Namespace) -> None:
     from .config import get_settings
     from .handlers import side_effect_handler
+    from .tracing import configure_tracing
     from .worker import Worker
 
+    configure_tracing("relay-worker")
     worker = Worker(
         get_settings().psycopg_dsn,
         args.queue,
@@ -81,8 +85,10 @@ def _demo(args: argparse.Namespace) -> None:
     from .handlers import side_effect_handler
     from .publisher import Publisher
     from .reaper import Reaper
+    from .tracing import configure_tracing
     from .worker import Worker
 
+    configure_tracing("relay-demo")
     settings = get_settings()
     dsn = settings.psycopg_dsn
 
