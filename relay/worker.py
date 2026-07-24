@@ -42,6 +42,8 @@ class Worker:
         lease: timedelta = timedelta(seconds=30),
         batch: int = 1,
         poll_interval: float = 0.05,
+        backoff_base: float = 1.0,
+        backoff_cap: float = 300.0,
     ) -> None:
         self.dsn = dsn
         self.queue = queue
@@ -50,6 +52,8 @@ class Worker:
         self.lease = lease
         self.batch = batch
         self.poll_interval = poll_interval
+        self.backoff_base = backoff_base
+        self.backoff_cap = backoff_cap
         self.processed = 0
         self.failed = 0
         self._stop = threading.Event()
@@ -111,6 +115,8 @@ class Worker:
                 lease_owner=job.lease_owner,
                 lease_token=job.lease_token,
                 error=repr(exc),
-                backoff=timedelta(seconds=full_jitter(job.attempts)),
+                backoff=timedelta(
+                    seconds=full_jitter(job.attempts, base=self.backoff_base, cap=self.backoff_cap)
+                ),
             )
         self.failed += 1
