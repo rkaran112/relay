@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>relay — control plane</title>
+<style>
+  :root {
+    --bg: #0b0e14; --panel: #131926; --panel-2: #0f1420; --line: #222c3d;
+    --ink: #e6ecf5; --muted: #8595ad; --faint: #5a6880;
+    --accent: #6d7cff; --accent-ink: #b7c0ff;
+    --pending: #f0b429; --leased: #4aa3ff; --succeeded: #37d39b; --failed: #ff7a59; --dead: #ff5470;
+    --radius: 14px; --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: radial-gradient(1200px 600px at 80% -10%, #16203a 0%, var(--bg) 55%);
+    color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 28px 22px 60px; }
+  header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 26px; }
+  .brand { display: flex; align-items: baseline; gap: 12px; }
+  .logo { font-family: var(--mono); font-weight: 700; font-size: 26px; letter-spacing: -0.5px; }
+  .logo b { color: var(--accent); }
+  .tag { color: var(--muted); font-size: 13px; }
+  .spacer { flex: 1; }
+  .status { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px;
+    background: var(--panel); border: 1px solid var(--line); padding: 7px 12px; border-radius: 999px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); }
+  .dot.live { background: var(--succeeded); box-shadow: 0 0 0 3px rgba(55,211,155,.15); }
+  .dot.down { background: var(--dead); box-shadow: 0 0 0 3px rgba(255,84,112,.15); }
+  .queuebar { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; }
+  .queuebar label { color: var(--muted); font-size: 13px; }
+  input, button, select { font-family: inherit; font-size: 14px; color: var(--ink); }
+  input, select { background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px;
+    padding: 8px 11px; outline: none; }
+  input:focus, select:focus { border-color: var(--accent); }
+  .queuebar input { font-family: var(--mono); min-width: 150px; }
+
+  .grid { display: grid; gap: 16px; }
+  .tiles { grid-template-columns: repeat(5, 1fr); }
+  @media (max-width: 780px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+  .card { background: linear-gradient(180deg, var(--panel), var(--panel-2)); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 16px 18px; }
+  .tile .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+  .tile .v { font-family: var(--mono); font-size: 30px; font-weight: 600; margin-top: 6px; }
+  .tile .v.small { font-size: 22px; }
+  .tile.pending .v { color: var(--pending); }
+  .tile.leased .v { color: var(--leased); }
+  .tile.succeeded .v { color: var(--succeeded); }
+  .tile.dead .v { color: var(--dead); }
+  .tile .sub { color: var(--faint); font-size: 11px; font-family: var(--mono); margin-top: 2px; }
+
+  .bar { height: 16px; border-radius: 8px; overflow: hidden; display: flex; background: var(--panel-2);
+    border: 1px solid var(--line); }
+  .bar > span { height: 100%; transition: width .4s ease; }
+  .seg-pending { background: var(--pending); } .seg-leased { background: var(--leased); }
+  .seg-succeeded { background: var(--succeeded); } .seg-failed { background: var(--failed); }
+  .seg-dead { background: var(--dead); }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; color: var(--muted); font-size: 12px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px;
+    vertical-align: middle; }
+
+  .cols { grid-template-columns: 360px 1fr; align-items: start; }
+  @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .09em; color: var(--muted);
+    margin: 0 0 14px; font-weight: 600; }
+  .field { margin-bottom: 13px; }
+  .field label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 5px; }
+  .field input, .field select { width: 100%; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  button.primary { background: var(--accent); border: 0; color: #0b0e14; font-weight: 600;
+    padding: 10px 14px; border-radius: 9px; cursor: pointer; width: 100%; }
+  button.primary:hover { filter: brightness(1.08); }
+  button.ghost { background: transparent; border: 1px solid var(--line); color: var(--muted);
+    padding: 8px 12px; border-radius: 8px; cursor: pointer; }
+  button.ghost:hover { border-color: var(--accent); color: var(--accent-ink); }
+  .quick { display: flex; gap: 8px; margin-top: 10px; }
+  .quick button { flex: 1; }
+
+  canvas { width: 100%; height: 70px; display: block; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--faint); font-weight: 500; font-size: 11px; text-transform: uppercase;
+    letter-spacing: .06em; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  td { padding: 8px; border-bottom: 1px solid var(--panel-2); font-family: var(--mono); font-size: 12px;
+    vertical-align: middle; }
+  td.err { color: var(--failed); font-family: var(--sans); max-width: 260px; }
+  .empty { color: var(--faint); padding: 22px 8px; text-align: center; }
+  button.replay { background: rgba(109,124,255,.12); border: 1px solid var(--accent); color: var(--accent-ink);
+    padding: 5px 10px; border-radius: 7px; cursor: pointer; font-size: 12px; }
+  button.replay:hover { background: rgba(109,124,255,.22); }
+  footer { margin-top: 30px; color: var(--faint); font-size: 12px; display: flex; gap: 16px; }
+  footer a { color: var(--muted); text-decoration: none; }
+  footer a:hover { color: var(--accent-ink); }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--panel); border: 1px solid var(--line); padding: 10px 16px; border-radius: 10px;
+    font-size: 13px; opacity: 0; transition: opacity .25s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="logo">re<b>l</b>ay</div>
+      <div class="tag">Postgres task queue · at-least-once delivery, exactly-once effects</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="status"><span id="dot" class="dot"></span><span id="statusText">connecting…</span></div>
+  </header>
+
+  <div class="queuebar">
+    <label>queue</label>
+    <input id="queue" value="default" spellcheck="false" />
+    <div class="spacer"></div>
+    <span class="tag" id="clock"></span>
+  </div>
+
+  <div class="grid tiles" style="margin-bottom:16px">
+    <div class="card tile pending"><div class="k">Pending</div><div class="v" id="t-pending">0</div>
+      <div class="sub" id="t-age">oldest 0s</div></div>
+    <div class="card tile leased"><div class="k">Leased</div><div class="v" id="t-leased">0</div>
+      <div class="sub">in flight</div></div>
+    <div class="card tile succeeded"><div class="k">Succeeded</div><div class="v" id="t-succeeded">0</div>
+      <div class="sub" id="t-tput">0 /s</div></div>
+    <div class="card tile dead"><div class="k">Dead</div><div class="v" id="t-dead">0</div>
+      <div class="sub" id="t-dlq">0 in dlq</div></div>
+    <div class="card tile"><div class="k">Throughput</div><div class="v small" id="t-rate">0<span
+      style="font-size:14px;color:var(--faint)"> /s</span></div>
+      <canvas id="spark" width="300" height="70"></canvas></div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <h2>State distribution</h2>
+    <div class="bar" id="bar">
+      <span class="seg-pending" style="width:0"></span><span class="seg-leased" style="width:0"></span>
+      <span class="seg-succeeded" style="width:0"></span><span class="seg-failed" style="width:0"></span>
+      <span class="seg-dead" style="width:0"></span>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--pending)"></i>pending</span>
+      <span><i style="background:var(--leased)"></i>leased</span>
+      <span><i style="background:var(--succeeded)"></i>succeeded</span>
+      <span><i style="background:var(--failed)"></i>failed</span>
+      <span><i style="background:var(--dead)"></i>dead</span>
+    </div>
+  </div>
+
+  <div class="grid cols">
+    <div class="card">
+      <h2>Enqueue jobs</h2>
+      <div class="field"><label>count</label><input id="f-count" type="number" value="50" min="1" /></div>
+      <div class="row2">
+        <div class="field"><label>work (ms)</label><input id="f-work" type="number" value="40" min="0" /></div>
+        <div class="field"><label>priority</label><input id="f-prio" type="number" value="0" /></div>
+      </div>
+      <div class="field"><label>failure rate (0–1)</label>
+        <input id="f-fail" type="number" value="0" min="0" max="1" step="0.05" /></div>
+      <button class="primary" id="enqueue">Enqueue</button>
+      <div class="quick">
+        <button class="ghost" data-burst='{"count":200,"work_ms":30}'>Burst 200</button>
+        <button class="ghost" data-burst='{"count":50,"work_ms":20,"fail_rate":0.3}'>50 flaky</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Dead letter queue <span id="dlq-count" class="tag"></span></h2>
+      <table>
+        <thead><tr><th>id</th><th>job</th><th>attempts</th><th>last error</th><th>died</th><th></th></tr></thead>
+        <tbody id="dlq-body"><tr><td colspan="6" class="empty">nothing dead-lettered</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer>
+    <a href="/docs" target="_blank">API docs ↗</a>
+    <a href="/metrics" target="_blank">/metrics ↗</a>
+    <span class="spacer"></span>
+    <span>run workers with <code style="font-family:var(--mono)">relay demo</code></span>
+  </footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const q = () => $("queue").value.trim() || "default";
+let sparkData = [], lastSucceeded = null, lastTime = null;
+
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 1800);
+}
+function setStatus(live) {
+  $("dot").className = "dot " + (live ? "live" : "down");
+  $("statusText").textContent = live ? "connected" : "control plane unreachable";
+}
+
+async function poll() {
+  try {
+    const [stats, dlq] = await Promise.all([
+      fetch(`/queues/${encodeURIComponent(q())}/stats`).then(r => r.json()),
+      fetch(`/queues/${encodeURIComponent(q())}/dlq`).then(r => r.json()),
+    ]);
+    setStatus(true);
+    render(stats, dlq);
+  } catch (e) { setStatus(false); }
+  $("clock").textContent = new Date().toLocaleTimeString();
+}
+
+function render(s, dlq) {
+  $("t-pending").textContent = s.pending;
+  $("t-leased").textContent = s.leased;
+  $("t-succeeded").textContent = s.succeeded;
+  $("t-dead").textContent = s.dead;
+  $("t-age").textContent = "oldest " + fmtAge(s.oldest_pending_age_seconds);
+  $("t-dlq").textContent = s.dead_letters + " in dlq";
+
+  // throughput = succeeded delta / elapsed
+  const now = performance.now();
+  if (lastSucceeded !== null) {
+    const dt = (now - lastTime) / 1000;
+    const rate = Math.max(0, (s.succeeded - lastSucceeded) / dt);
+    $("t-rate").innerHTML = Math.round(rate) + '<span style="font-size:14px;color:var(--faint)"> /s</span>';
+    $("t-tput").textContent = Math.round(rate) + " /s";
+    sparkData.push(rate); if (sparkData.length > 60) sparkData.shift();
+    drawSpark();
+  }
+  lastSucceeded = s.succeeded; lastTime = now;
+
+  const total = s.pending + s.leased + s.succeeded + s.failed + s.dead || 1;
+  const segs = $("bar").children;
+  const vals = [s.pending, s.leased, s.succeeded, s.failed, s.dead];
+  for (let i = 0; i < segs.length; i++) segs[i].style.width = (100 * vals[i] / total) + "%";
+
+  $("dlq-count").textContent = dlq.length ? `(${dlq.length})` : "";
+  const body = $("dlq-body");
+  if (!dlq.length) { body.innerHTML = '<tr><td colspan="6" class="empty">nothing dead-lettered</td></tr>'; return; }
+  body.innerHTML = dlq.map(d => `<tr>
+    <td>${d.id}</td><td>${d.job_id}</td><td>${d.attempts}</td>
+    <td class="err">${escapeHtml(d.last_error || "")}</td>
+    <td>${new Date(d.died_at).toLocaleTimeString()}</td>
+    <td>${d.replayed_at ? '<span class="tag">replayed</span>' : `<button class="replay" data-id="${d.id}">Replay</button>`}</td>
+  </tr>`).join("");
+}
+
+function fmtAge(s) {
+  if (!s) return "0s"; s = Math.round(s);
+  if (s < 60) return s + "s"; if (s < 3600) return Math.floor(s/60) + "m"; return Math.floor(s/3600) + "h";
+}
+function escapeHtml(s) { return s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function drawSpark() {
+  const c = $("spark"), ctx = c.getContext("2d"), w = c.width, h = c.height;
+  ctx.clearRect(0, 0, w, h);
+  if (sparkData.length < 2) return;
+  const max = Math.max(...sparkData, 1);
+  ctx.beginPath();
+  sparkData.forEach((v, i) => {
+    const x = (i / (sparkData.length - 1)) * w, y = h - (v / max) * (h - 6) - 3;
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  });
+  ctx.strokeStyle = "#37d39b"; ctx.lineWidth = 2; ctx.lineJoin = "round"; ctx.stroke();
+  ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
+  ctx.fillStyle = "rgba(55,211,155,.10)"; ctx.fill();
+}
+
+async function enqueueMany({ count, work_ms, priority, fail_rate }) {
+  const payload = { work_ms, fail_rate };
+  const body = JSON.stringify({ payload, priority });
+  const chunk = 25;
+  for (let i = 0; i < count; i += chunk) {
+    const n = Math.min(chunk, count - i);
+    await Promise.all(Array.from({ length: n }, () =>
+      fetch(`/queues/${encodeURIComponent(q())}/jobs`, {
+        method: "POST", headers: { "content-type": "application/json" }, body,
+      })));
+  }
+  toast(`enqueued ${count} job${count === 1 ? "" : "s"}`);
+  poll();
+}
+
+$("enqueue").addEventListener("click", () => enqueueMany({
+  count: +$("f-count").value || 1, work_ms: +$("f-work").value || 0,
+  priority: +$("f-prio").value || 0, fail_rate: +$("f-fail").value || 0,
+}));
+document.querySelectorAll("[data-burst]").forEach(b =>
+  b.addEventListener("click", () => enqueueMany({
+    priority: 0, fail_rate: 0, work_ms: 0, count: 0, ...JSON.parse(b.dataset.burst),
+  })));
+$("dlq-body").addEventListener("click", async (e) => {
+  const btn = e.target.closest("button.replay"); if (!btn) return;
+  const r = await fetch(`/queues/${encodeURIComponent(q())}/dlq/${btn.dataset.id}/replay`, { method: "POST" });
+  toast(r.ok ? "replayed → new job enqueued" : "replay failed");
+  poll();
+});
+$("queue").addEventListener("change", () => { lastSucceeded = null; sparkData = []; poll(); });
+
+poll();
+setInterval(poll, 1000);
+</script>
+</body>
+</html>
