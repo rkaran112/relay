@@ -1,6 +1,9 @@
 services:
   db:
     image: postgres:16
+    # Headroom for the concurrency test (many simultaneous connections) and the
+    # 8-worker benchmark. Well above Postgres' default of 100.
+    command: ["postgres", "-c", "max_connections=300"]
     environment:
       POSTGRES_DB: relay
       POSTGRES_USER: relay

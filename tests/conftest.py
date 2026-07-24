@@ -45,6 +45,24 @@ def _database() -> Iterator[None]:
     yield
 
 
+_TABLES = ("jobs", "job_results", "outbox", "dead_letters", "side_effects")
+
+
+@pytest.fixture(autouse=True)
+def _clean() -> Iterator[None]:
+    """Truncate all queue tables before each test so cases don't leak into each other."""
+    with psycopg.connect(TEST_DSN, autocommit=True) as conn:
+        conn.execute("TRUNCATE " + ", ".join(_TABLES) + " RESTART IDENTITY CASCADE")
+        conn.execute("ALTER SEQUENCE lease_token_seq RESTART WITH 1")
+    yield
+
+
+@pytest.fixture
+def dsn() -> str:
+    """The libpq DSN of the test database, for tests that open their own connections."""
+    return TEST_DSN
+
+
 @pytest.fixture
 def db() -> Iterator[psycopg.Connection[TupleRow]]:
     conn = psycopg.connect(TEST_DSN, autocommit=True)
