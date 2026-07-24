@@ -88,14 +88,14 @@ delivery), **premature lease expiry** (aggressive reaper / clock skew), and an o
 **Postgres partition** (`docker pause`/`unpause`). It then heals, drains to quiescence,
 publishes the outbox, and asserts the five invariants in `chaos/invariants.py`.
 
-- **Fencing ON:** 12/12 interactive sessions + a 100-session batch — **zero invariant
-  violations** (zero duplicate side effects, zero lost jobs).
+- **Fencing ON:** **100/100 sessions held all invariants** — zero duplicate side effects,
+  zero lost jobs, no stuck leases, no premature dead letters, every outbox event published.
 - **Negative control (`--negative-control`, fencing disabled):** 4/5 sessions immediately
   fail invariant 1 with duplicate side effects. The harness detects the exact bug it exists
   to catch, so a green run is meaningful rather than vacuous.
 
-The spec targets 500 sessions; on this 2-core laptop a session takes a few seconds, so
-`make chaos SESSIONS=500` is the full run. The batches above are what was executed here.
+The spec targets 500 sessions; 100 were run here (a few seconds each on this 2-core laptop).
+`make chaos SESSIONS=500` runs the full sweep.
 
 ### A bug the invariant suite actually caught
 
