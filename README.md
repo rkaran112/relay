@@ -13,10 +13,21 @@ phase-by-phase build plan.
 
 ## Status
 
-**Phase 0 (scaffold) — done.** docker-compose (Postgres 16 + Redis 7 + app), uv-managed
-deps, Alembic wiring, a real-Postgres pytest fixture, ruff + mypy-strict, and CI. The
-schema, enqueue/dequeue/lease/complete, retries, fencing, outbox, API, observability,
-benchmarks and the chaos harness land in Phases 1–9.
+**All phases (0–9) complete.** Schema + idempotent enqueue, `SKIP LOCKED` leasing, fenced
+completion, retries with full-jitter backoff, the visibility-timeout reaper + dead letters,
+fencing tokens, the transactional outbox + Redis-Streams publisher, the FastAPI control
+plane + live dashboard, OpenTelemetry tracing + Prometheus/Grafana, a load benchmark, and a
+chaos harness with a negative control. 22 tests against real Postgres; `ruff` + `mypy
+--strict` clean. Measured numbers and the definition-of-done checklist are in
+[RESULTS.md](RESULTS.md).
+
+### See it run
+
+```bash
+docker compose up -d db redis
+uv run relay migrate
+uv run relay demo          # API + workers + reaper + publisher -> http://localhost:8000
+```
 
 ## Requirements
 
@@ -46,10 +57,13 @@ python -m uv run pytest -q
 ## Layout
 
 ```
-relay/        the package: config, db access, migration runner, CLI
-alembic/      migrations (env.py + versions/); schema lands in Phase 1
-tests/        pytest suite; conftest.py provisions and migrates a real test DB
-docker/       container entrypoint (migrate-on-boot)
-bench/        load benchmark            (Phase 8)
-chaos/        chaos harness + invariants (Phase 9)
+relay/          the package: config, db, queue ops, worker, reaper, publisher,
+                outbox, api + dashboard, tracing, metrics, CLI
+relay/web/      the dashboard (self-contained index.html)
+alembic/        migrations
+tests/          pytest suite; conftest.py provisions and migrates a real test DB
+docker/         container entrypoint (migrate-on-boot)
+observability/  Prometheus + Grafana provisioning
+bench/          load benchmark        (make bench)
+chaos/          chaos harness + invariants (make chaos)
 ```
