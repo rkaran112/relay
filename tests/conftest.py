@@ -64,6 +64,11 @@ def dsn() -> str:
 
 
 @pytest.fixture
+def redis_url() -> str:
+    return os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+
+
+@pytest.fixture
 def db() -> Iterator[psycopg.Connection[TupleRow]]:
     conn = psycopg.connect(TEST_DSN, autocommit=True)
     try:
