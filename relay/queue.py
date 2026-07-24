@@ -8,6 +8,7 @@ inside the caller's handler transaction.
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -153,6 +154,16 @@ def complete(
     Runs inside the caller's transaction so the business write and this completion
     commit together — the heart of exactly-once side effects (Path A).
     """
+    if os.environ.get("RELAY_DISABLE_FENCE") == "1":
+        # NEGATIVE CONTROL ONLY (chaos harness): drop the fencing predicate so a
+        # zombie's stale completion is wrongly accepted, proving the invariant suite
+        # catches the resulting duplicate side effect. Never set this in production.
+        cur = conn.execute(
+            "UPDATE jobs SET state = 'succeeded', lease_owner = NULL, "
+            "lease_token = NULL, lease_expires_at = NULL WHERE id = %s",
+            (job_id,),
+        )
+        return cur.rowcount == 1
     cur = conn.execute(
         """
         UPDATE jobs
