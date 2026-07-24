@@ -41,7 +41,7 @@ fmt:
 check: lint typecheck test
 
 bench:
-	@echo "bench harness lands in Phase 8 (bench/load.py)"
+	$(UV) run python bench/load.py
 
 chaos:
-	@echo "chaos harness lands in Phase 9 (chaos/runner.py), SESSIONS=$(SESSIONS)"
+	$(UV) run python -m chaos.runner --sessions $(SESSIONS)
