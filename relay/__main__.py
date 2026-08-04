@@ -11,9 +11,13 @@
 from __future__ import annotations
 
 import argparse
+import os
 from datetime import timedelta
 
 from . import __version__, migrations
+
+# PaaS platforms (Render, Fly, Heroku) assign the port via $PORT.
+_DEFAULT_PORT = int(os.environ.get("PORT", "8000"))
 
 
 def _serve(args: argparse.Namespace) -> None:
@@ -125,7 +129,7 @@ def main(argv: list[str] | None = None) -> int:
 
     serve = sub.add_parser("serve", help="run the control-plane API + dashboard")
     serve.add_argument("--host", default="127.0.0.1")
-    serve.add_argument("--port", type=int, default=8000)
+    serve.add_argument("--port", type=int, default=_DEFAULT_PORT)
 
     worker = sub.add_parser("worker", help="run a worker")
     worker.add_argument("--queue", default="default")
@@ -140,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
 
     demo = sub.add_parser("demo", help="run API + workers + reaper + publisher together")
     demo.add_argument("--host", default="127.0.0.1")
-    demo.add_argument("--port", type=int, default=8000)
+    demo.add_argument("--port", type=int, default=_DEFAULT_PORT)
     demo.add_argument("--queue", default="default")
     demo.add_argument("--workers", type=int, default=4)
     demo.add_argument("--batch", type=int, default=10)

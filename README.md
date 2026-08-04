@@ -29,6 +29,12 @@ uv run relay migrate
 uv run relay demo          # API + workers + reaper + publisher -> http://localhost:8000
 ```
 
+### Deploy
+
+One-click on Render via [`render.yaml`](render.yaml) (managed Postgres + Redis + a web
+service that runs `relay demo`); Fly.io works too. Full steps and the "why not Vercel"
+note are in [DEPLOY.md](DEPLOY.md).
+
 ## Requirements
 
 - [Docker](https://www.docker.com/) (Postgres + Redis run in containers)

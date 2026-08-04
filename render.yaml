@@ -1,0 +1,45 @@
+# Render Blueprint — one-click full-system deploy.
+#
+# Render dashboard -> New -> Blueprint -> pick this repo. Render reads this file and
+# provisions a managed Postgres, a key-value (Redis) store, and one web service that
+# runs `relay demo` (API + dashboard + workers + reaper + publisher in one process).
+# The Docker entrypoint applies Alembic migrations on boot, so first deploy is turnkey.
+#
+# Free tier: the web service sleeps after ~15 min idle and cold-starts on the next
+# request (the workers pause while it's asleep). For always-on processing, bump the web
+# service off free and/or split the workers into their own `type: worker` service
+# running `relay worker` + `relay reaper` + `relay publisher` (see DEPLOY.md).
+
+databases:
+  - name: relay-db
+    plan: free
+    databaseName: relay
+    user: relay
+
+services:
+  - type: keyvalue
+    name: relay-redis
+    plan: free
+    ipAllowList: []            # reachable only from services in this Blueprint
+    maxmemoryPolicy: noeviction
+
+  - type: web
+    name: relay
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # Overrides the image CMD; the ENTRYPOINT still runs migrations first. No --port:
+    # the app reads Render's $PORT. --host 0.0.0.0 is required inside the container.
+    dockerCommand: relay demo --host 0.0.0.0 --workers 2
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: relay-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: relay-redis
+          property: connectionString

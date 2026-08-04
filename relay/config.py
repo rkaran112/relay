@@ -6,15 +6,32 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-_SQLALCHEMY_PREFIX = "postgresql+psycopg://"
-_LIBPQ_PREFIX = "postgresql://"
+
+def _after_scheme(url: str) -> str:
+    """Everything after ``scheme://`` — the user:pass@host/db portion."""
+    return url.split("://", 1)[1] if "://" in url else url
+
+
+def to_sqlalchemy_url(url: str) -> str:
+    """Normalize any Postgres URL to the SQLAlchemy form with the psycopg-3 driver.
+
+    Managed hosts hand out different schemes — Render/Heroku give ``postgres://``,
+    Neon gives ``postgresql://`` — and SQLAlchemy 2.0 rejects both (it needs the
+    explicit ``+psycopg`` driver). This makes the app portable across all of them.
+    """
+    return f"postgresql+psycopg://{_after_scheme(url)}"
+
+
+def to_psycopg_dsn(url: str) -> str:
+    """Normalize any Postgres URL to a native libpq DSN for psycopg."""
+    return f"postgresql://{_after_scheme(url)}"
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # SQLAlchemy-style URL (with the +psycopg driver). Alembic consumes it as-is;
-    # the runtime queue code uses `psycopg_dsn`, which strips the driver prefix.
+    # Any Postgres URL scheme works (postgres://, postgresql://, +psycopg); the
+    # properties below normalize it for Alembic (SQLAlchemy) and psycopg respectively.
     database_url: str = "postgresql+psycopg://relay:relay@localhost:5432/relay"
     # Tests target this DB. When unset, the test fixture picks its own default so
     # it never runs against the dev database.
@@ -23,18 +40,11 @@ class Settings(BaseSettings):
 
     @property
     def sqlalchemy_url(self) -> str:
-        return self.database_url
+        return to_sqlalchemy_url(self.database_url)
 
     @property
     def psycopg_dsn(self) -> str:
         return to_psycopg_dsn(self.database_url)
-
-
-def to_psycopg_dsn(url: str) -> str:
-    """Turn a ``postgresql+psycopg://`` SQLAlchemy URL into a native libpq DSN."""
-    if url.startswith(_SQLALCHEMY_PREFIX):
-        return _LIBPQ_PREFIX + url[len(_SQLALCHEMY_PREFIX) :]
-    return url
 
 
 @lru_cache
