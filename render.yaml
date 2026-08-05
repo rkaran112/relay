@@ -1,9 +1,15 @@
 # Render Blueprint — one-click full-system deploy.
 #
 # Render dashboard -> New -> Blueprint -> pick this repo. Render reads this file and
-# provisions a managed Postgres, a key-value (Redis) store, and one web service that
-# runs `relay demo` (API + dashboard + workers + reaper + publisher in one process).
-# The Docker entrypoint applies Alembic migrations on boot, so first deploy is turnkey.
+# provisions a managed Postgres and one web service that runs `relay demo` (API +
+# dashboard + workers + reaper + publisher in one process). The Docker entrypoint
+# applies Alembic migrations on boot, so the first deploy is turnkey.
+#
+# Redis is intentionally NOT provisioned here: Render's free tier allows only one Key
+# Value instance per account. Redis only powers the outbox publisher (which fails
+# quietly when absent) — the queue and dashboard work fully without it. To enable the
+# publisher, add a REDIS_URL env var in the Render dashboard pointing at any Redis
+# (your existing Render Key Value's Internal URL, or a free Upstash URL).
 #
 # Free tier: the web service sleeps after ~15 min idle and cold-starts on the next
 # request (the workers pause while it's asleep). For always-on processing, bump the web
@@ -17,12 +23,6 @@ databases:
     user: relay
 
 services:
-  - type: keyvalue
-    name: relay-redis
-    plan: free
-    ipAllowList: []            # reachable only from services in this Blueprint
-    maxmemoryPolicy: noeviction
-
   - type: web
     name: relay
     runtime: docker
@@ -38,8 +38,4 @@ services:
         fromDatabase:
           name: relay-db
           property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: relay-redis
-          property: connectionString
+      # REDIS_URL is optional — add it in the dashboard to enable the outbox publisher.

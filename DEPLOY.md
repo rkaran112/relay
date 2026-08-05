@@ -41,15 +41,16 @@ Notes:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    dockerCommand: sh -c "relay reaper & relay publisher & relay worker --queue default"
+    dockerCommand: sh -c "relay reaper & relay worker --queue default"
     envVars:
       - { key: DATABASE_URL, fromDatabase: { name: relay-db, property: connectionString } }
-      - { key: REDIS_URL, fromService: { type: keyvalue, name: relay-redis, property: connectionString } }
   ```
   and change the web service's `dockerCommand` to `relay serve --host 0.0.0.0`.
-- **If your Render account predates "Key Value":** change `type: keyvalue` to
-  `type: redis`. Redis is optional anyway — without it the queue and dashboard work
-  fully; only the outbox→stream publisher is idle (it fails quietly).
+- **Redis is not provisioned by the blueprint** — Render's free tier allows only one
+  Key Value instance per account. Redis only powers the outbox publisher; without it
+  the queue and dashboard work fully (the publisher fails quietly). To enable it, add a
+  `REDIS_URL` env var on the web service in the dashboard pointing at any Redis (your
+  existing Render Key Value's Internal URL, or a free Upstash URL).
 
 ---
 
