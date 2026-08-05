@@ -20,6 +20,7 @@ ENV PATH="/app/.venv/bin:$PATH"
 RUN chmod +x /app/docker/entrypoint.sh
 
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
-# Placeholder workload for Phase 0: stay alive after migrating. Replaced by the
-# worker / publisher / api commands in later phases.
-CMD ["sleep", "infinity"]
+# Default: run the whole system (API + dashboard + workers + reaper + publisher). The
+# entrypoint applies migrations first, then execs this. Binds 0.0.0.0 and reads $PORT.
+# docker-compose and other hosts can override this command.
+CMD ["relay", "demo", "--host", "0.0.0.0", "--workers", "2"]

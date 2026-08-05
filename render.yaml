@@ -29,9 +29,9 @@ services:
     plan: free
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    # Overrides the image CMD; the ENTRYPOINT still runs migrations first. No --port:
-    # the app reads Render's $PORT. --host 0.0.0.0 is required inside the container.
-    dockerCommand: relay demo --host 0.0.0.0 --workers 2
+    # No dockerCommand on purpose: Render's dockerCommand REPLACES the image ENTRYPOINT,
+    # which would skip the migrate-on-boot step. Letting the Dockerfile's ENTRYPOINT +
+    # CMD run means migrations apply first, then `relay demo` starts (binds $PORT).
     healthCheckPath: /healthz
     envVars:
       - key: DATABASE_URL
