@@ -31,9 +31,12 @@ uv run relay demo          # API + workers + reaper + publisher -> http://localh
 
 ### Deploy
 
-One-click on Render via [`render.yaml`](render.yaml) (managed Postgres + Redis + a web
-service that runs `relay demo`); Fly.io works too. Full steps and the "why not Vercel"
-note are in [DEPLOY.md](DEPLOY.md).
+**Live demo: https://relay-7b2o.onrender.com** (Render free tier — the first request
+cold-starts in ~30–60s).
+
+One-click on Render via [`render.yaml`](render.yaml): managed Postgres + a web service
+that runs `relay demo` and applies migrations on boot (Redis is optional). Fly.io works
+too. Full steps and the "why not Vercel" note are in [DEPLOY.md](DEPLOY.md).
 
 ## Requirements
 

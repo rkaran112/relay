@@ -1,8 +1,13 @@
 # LinkedIn showcase kit — relay
 
-Fill in two links before posting:
-- `LIVE_URL` — the Render/Fly URL of the dashboard
-- `REPO_URL` — the GitHub repo
+Links (live):
+- Live demo: https://relay-7b2o.onrender.com
+- Repo: https://github.com/rkaran112/relay  (private for now — flip to public before
+  posting so people can open it)
+
+Note: the Render free web service sleeps after ~15 min idle, so the first visit to the
+demo takes ~30–60s to cold-start. Worth saying in the post, or open it a minute before
+you publish.
 
 Attach the dashboard screenshot (`docs/dashboard.png`) as the post image — it stops the
 scroll and shows something real. Best posting time is Tue–Thu morning.
@@ -47,8 +52,8 @@ scroll and shows something real. Best posting time is Tue–Thu morning.
 > Honest benchmark on a 2-core laptop: ~640 jobs/sec, scaling knee at 4 workers (exactly
 > the core count). I wrote down what I measured, not a number that sounds better.
 >
-> Live demo → LIVE_URL
-> Code + design write-up → REPO_URL
+> Live demo → https://relay-7b2o.onrender.com
+> Code + design write-up → https://github.com/rkaran112/relay
 >
 > #distributedsystems #backend #postgresql #python #softwareengineering
 
@@ -68,7 +73,7 @@ scroll and shows something real. Best posting time is Tue–Thu morning.
 >
 > No Celery, no SQS. Live demo + code below.
 >
-> LIVE_URL · REPO_URL
+> https://relay-7b2o.onrender.com · https://github.com/rkaran112/relay
 > #distributedsystems #backend #postgresql
 
 ---
@@ -106,7 +111,7 @@ Make 5 simple slides (Canva/Figma, dark background to match the dashboard):
 - [ ] Optional 10–15s screen recording: enqueue a burst → watch the tiles + sparkline
       move → hit "50 flaky" → replay a dead letter. GIFs/video lift reach.
 - [ ] Pin the post to your profile Featured section
-- [ ] Make sure `REPO_URL` README opens with the exactly-once line and the screenshot
+- [ ] Make sure `https://github.com/rkaran112/relay` README opens with the exactly-once line and the screenshot
 
 ## Talking points if someone comments (interview reps)
 
