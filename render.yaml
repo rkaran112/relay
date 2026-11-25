@@ -1,9 +1,14 @@
 # Render Blueprint — one-click full-system deploy.
 #
 # Render dashboard -> New -> Blueprint -> pick this repo. Render reads this file and
-# provisions a managed Postgres and one web service that runs `relay demo` (API +
-# dashboard + workers + reaper + publisher in one process). The Docker entrypoint
-# applies Alembic migrations on boot, so the first deploy is turnkey.
+# provisions one web service that runs `relay demo` (API + dashboard + workers +
+# reaper + publisher in one process). The Docker entrypoint applies Alembic
+# migrations on boot, so an empty database is enough.
+#
+# The database is NOT created here. Render deletes its free Postgres after about 30 days
+# (plus a short grace period), which breaks the deploy. Use an external Postgres that
+# does not expire (for example Neon's free plan) and paste its connection string into
+# the DATABASE_URL environment variable in the Render dashboard.
 #
 # Redis is intentionally NOT provisioned here: Render's free tier allows only one Key
 # Value instance per account. Redis only powers the outbox publisher (which fails
@@ -15,12 +20,6 @@
 # request (the workers pause while it's asleep). For always-on processing, bump the web
 # service off free and/or split the workers into their own `type: worker` service
 # running `relay worker` + `relay reaper` + `relay publisher` (see DEPLOY.md).
-
-databases:
-  - name: relay-db
-    plan: free
-    databaseName: relay
-    user: relay
 
 services:
   - type: web
@@ -35,7 +34,5 @@ services:
     healthCheckPath: /healthz
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: relay-db
-          property: connectionString
+        sync: false   # set by hand in the dashboard; never stored in the repo
       # REDIS_URL is optional — add it in the dashboard to enable the outbox publisher.

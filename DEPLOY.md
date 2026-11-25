@@ -15,9 +15,14 @@ split the web tier onto Vercel and run the workers on a small always-on box.
 
 ## Render (recommended, one click)
 
-Everything is described in [`render.yaml`](render.yaml): a managed Postgres, a
-key-value (Redis) store, and one web service that runs `relay demo` (API + dashboard +
-workers + reaper + publisher). Migrations apply on boot.
+[`render.yaml`](render.yaml) describes one web service that runs `relay demo` (API +
+dashboard + workers + reaper + publisher). Migrations apply on boot.
+
+The database lives elsewhere. Render deletes its free Postgres about 30 days after
+creation (after a 14-day grace period), and the app then fails on startup with
+`failed to resolve host 'dpg-...'`. Create a Postgres that does not expire (for example
+on Neon's free plan), copy its **direct** (not pooled) connection string, and set it as
+`DATABASE_URL` on the web service. Never commit that string.
 
 1. **Push to GitHub** (Render deploys from a repo):
    ```bash
@@ -25,7 +30,7 @@ workers + reaper + publisher). Migrations apply on boot.
    git push -u origin master
    ```
 2. **Render → New → Blueprint**, pick the repo. Render reads `render.yaml` and creates
-   all three resources. Click **Apply**.
+   the web service. Enter `DATABASE_URL` when asked, then click **Apply**.
 3. Wait for the build. The web service's URL (`https://relay-XXXX.onrender.com`) serves
    the dashboard; `GET /healthz` is the health check.
 
@@ -43,7 +48,7 @@ Notes:
     dockerContext: .
     dockerCommand: sh -c "relay reaper & relay worker --queue default"
     envVars:
-      - { key: DATABASE_URL, fromDatabase: { name: relay-db, property: connectionString } }
+      - { key: DATABASE_URL, sync: false }   # same external database as the web service
   ```
   and change the web service's `dockerCommand` to `relay serve --host 0.0.0.0`.
 - **Redis is not provisioned by the blueprint** — Render's free tier allows only one
